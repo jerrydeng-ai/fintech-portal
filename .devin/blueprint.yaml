@@ -1,0 +1,28 @@
+# https://docs.devin.ai/onboard-devin/environment-yaml
+initialize:
+  - uses: github.com/actions/setup-node@v4
+    with:
+      node-version: "22"
+
+maintenance: |
+  npm install
+
+knowledge:
+  - name: lint
+    contents: |
+      npm run lint
+  - name: typecheck
+    contents: |
+      npm run typecheck
+  - name: test
+    contents: |
+      npm test
+  - name: build
+    contents: |
+      npm run build
+  - name: dev-server
+    contents: |
+      npm run dev   # predev creates .env, migrates and seeds the demo DB
+  - name: db-reset
+    contents: |
+      npm run db:reset
