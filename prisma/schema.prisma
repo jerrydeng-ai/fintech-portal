@@ -1,0 +1,91 @@
+// Demo uses SQLite for zero-setup local runs. To move to PostgreSQL:
+//   1. change `provider` to "postgresql" and point DATABASE_URL at Postgres
+//   2. optionally change the JSON-in-String audit columns to `Json`
+//   3. regenerate migrations (`npx prisma migrate dev`)
+// Application code only talks to Prisma through repositories, so nothing else changes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Platform: identities known to the internal-tools platform.
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  role          String
+  title         String
+  assignedCases KycCase[] @relation("AssignedAnalyst")
+}
+
+/// Platform: append-only audit trail shared by every internal tool.
+/// userId/userName are denormalised on purpose so events outlive user records.
+model AuditEvent {
+  id            String   @id @default(cuid())
+  timestamp     DateTime @default(now())
+  userId        String
+  userName      String
+  userRole      String
+  action        String
+  resourceType  String
+  resourceId    String
+  previousState String?
+  newState      String?
+  metadata      String?
+
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+}
+
+/// KYC module
+model Customer {
+  id               String   @id
+  fullName         String
+  email            String
+  country          String
+  countryCode      String
+  dateOfBirth      DateTime
+  accountCreatedAt DateTime
+  kycCase          KycCase?
+}
+
+/// KYC module
+model KycCase {
+  id                   String       @id
+  customerId           String       @unique
+  customer             Customer     @relation(fields: [customerId], references: [id])
+  status               String
+  riskScore            Int
+  riskLevel            String
+  reasonFlagged        String
+  assignedAnalystId    String?
+  assignedAnalyst      User?        @relation("AssignedAnalyst", fields: [assignedAnalystId], references: [id])
+  identityVerification String
+  documentType         String
+  documentStatus       String
+  addressVerification  String
+  sanctionsScreening   String
+  pepScreening         String
+  version              Int          @default(1)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  riskFactors          RiskFactor[]
+
+  @@index([status])
+  @@index([riskLevel])
+}
+
+/// KYC module
+model RiskFactor {
+  id          String  @id @default(cuid())
+  caseId      String
+  kycCase     KycCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  label       String
+  points      Int
+  description String?
+}
