@@ -1,16 +1,21 @@
-# Fintech Ops — KYC Review Queue
+# Fintech Ops — Internal Tools Platform
 
-A production-shaped internal tool for the Compliance Operations team: customers flagged by automated KYC screening land in a review queue, an analyst reviews the customer, approves / rejects / escalates, and every decision is written to an immutable audit trail.
+A production-shaped **internal-tools platform** — not a single app. It hosts multiple internal applications (KYC Review, Refund Operations today; Feature Flag Admin, AML review, merchant onboarding and more planned) on shared infrastructure, demonstrating how an engineering team can use Devin to **replace a low-code internal-tools platform** (e.g. Microsoft Power Apps) with real, reviewable, tested code — without losing the "spin up a new tool quickly" advantage.
 
-It is also a demonstration of how an engineering team can use Devin to **replace a low-code internal-tools platform** (e.g. Microsoft Power Apps) with real, reviewable, tested code — without losing the "spin up a new tool quickly" advantage. The codebase is deliberately split into:
+The codebase is deliberately split into:
 
 ```
 Reusable platform capabilities   (auth, RBAC, audit, database, shell, shared UI)
             +
-Application-specific logic       (the KYC module)
+Application-specific logic       (modules: KYC, Refunds, future tools)
 ```
 
-so that internal tool #2 is mostly "write a module", not "build a platform".
+so that internal tool #N is mostly "write a module", not "build a platform". The platform work is paid once; every additional application gets cheaper.
+
+Two applications ship in this repo as proof of the pattern:
+
+- **KYC Review** (`/kyc`) — customers flagged by automated screening land in a review queue; an analyst approves / rejects / escalates; every decision lands in an immutable audit trail. HIGH-risk rejections require secondary (Compliance Manager) approval.
+- **Refund Operations** (`/refunds`) — settled-card-transaction search, details and an audited refund action, built entirely on the shared platform without modifying the KYC module.
 
 ---
 
@@ -20,16 +25,17 @@ Requirements: Node.js 20+ (tested on 22) and npm. No database server needed.
 
 ```bash
 npm install      # creates .env from .env.example and generates the Prisma client
-npm run dev      # applies migrations, seeds 20 demo cases (first run only), starts Next.js
+npm run dev      # applies migrations, seeds 20 demo cases + 12 demo transactions (first run only), starts Next.js
 ```
 
 Open http://localhost:3000. Use the user switcher (top right) to change persona — no passwords.
 
 | User  | Role               | Can do                                              |
 | ----- | ------------------ | --------------------------------------------------- |
-| Alice | Compliance Analyst | View, approve, reject, escalate, view audit log     |
+| Alice | Compliance Analyst | View, approve, request rejection, escalate, view audit log |
 | Bob   | Support Agent      | View customers and KYC cases only                   |
-| Carol | Admin              | Everything                                          |
+| Carol | Compliance Manager | Approve or deny secondary rejections, view audit log |
+| Dana  | Compliance Manager | Same as Carol — lets a manager's own request be decided by a peer |
 
 Other scripts:
 
@@ -58,8 +64,8 @@ See [DEMO.md](./DEMO.md) for a five-minute demo script.
               platform/shell        ── app shell, module registry, navigation
                           │
       ┌───────────────────┼────────────────────┐
-  modules/kyc        platform/audit       components/
-  (business logic)   (append-only log)    (shared UI)
+  modules/kyc        modules/refunds    platform/audit      components/
+  (business logic)   (business logic)   (append-only log)   (shared UI)
       │
   services   ── authorization + workflow rules + transactions
       │
@@ -68,7 +74,7 @@ See [DEMO.md](./DEMO.md) for a five-minute demo script.
   platform/database ── Prisma client, transactions  →  SQLite (demo) / PostgreSQL
 ```
 
-The **Architecture** page in the app (`/architecture`) renders the same picture, the request flow for approving a case, and what tool #2 reuses vs. implements.
+The **Architecture** page in the app (`/architecture`) renders the same picture, the request flow for approving a case, and what each new module reuses vs. implements.
 
 ### Directory layout
 
@@ -76,13 +82,14 @@ The **Architecture** page in the app (`/architecture`) renders the same picture,
 src/
   app/                    Next.js routes (pages + API). Thin: parse input, call a service.
     tool-registry.ts      Composition root — the list of registered tool modules
-  modules/
-    kyc/                  ← APPLICATION-SPECIFIC
+  modules/                ← APPLICATION-SPECIFIC (one per internal tool)
+    kyc/
       types/              Domain types (statuses, risk levels, DTOs)
       services/           kyc-service (use cases), workflow (state machine), risk
       repository/         Prisma access for customers / cases / risk factors
       components/         Queue table, risk panel, review actions, badges
       module.ts           Registration manifest (name, nav items, permissions)
+    refunds/              Same shape: types / repository / services / components / module.ts
   platform/               ← REUSABLE BY EVERY TOOL
     auth/                 AuthProvider interface, demo provider, session helpers, SessionProvider
     rbac/                 Roles, permissions, requirePermission(), <PermissionGate>
@@ -132,15 +139,18 @@ The demo ships `demoAuthProvider`, which reads a `demo_user_id` cookie set by th
 
 Defined once in `src/platform/rbac/permissions.ts`:
 
-| Permission     | Support Agent | Compliance Analyst | Admin |
-| -------------- | :-----------: | :----------------: | :---: |
-| `customer:view`| ✓             | ✓                  | ✓     |
-| `kyc:view`     | ✓             | ✓                  | ✓     |
-| `kyc:approve`  |               | ✓                  | ✓     |
-| `kyc:reject`   |               | ✓                  | ✓     |
-| `kyc:escalate` |               | ✓                  | ✓     |
-| `audit:view`   |               | ✓                  | ✓     |
-| `admin:manage (ADMIN role only)` |               |                    | ✓     |
+| Permission     | Support Agent | Compliance Analyst | Compliance Manager | Admin |
+| -------------- | :-----------: | :----------------: | :----------------: | :---: |
+| `customer:view`| ✓             | ✓                  | ✓                  | ✓     |
+| `kyc:view`     | ✓             | ✓                  | ✓                  | ✓     |
+| `kyc:approve`  |               | ✓                  | ✓                  | ✓     |
+| `kyc:reject`   |               | ✓                  | ✓                  | ✓     |
+| `kyc:escalate` |               | ✓                  | ✓                  | ✓     |
+| `kyc:approve_rejection` |    |                    | ✓                  | ✓     |
+| `refund:view`  | ✓             | ✓                  | ✓                  | ✓     |
+| `refund:approve` |            | ✓                  | ✓                  | ✓     |
+| `audit:view`   |               | ✓                  | ✓                  | ✓     |
+| `admin:manage` |               |                    |                    | ✓     |
 
 - **Server side is authoritative.** Every service function starts with `requirePermission(actor, permission)`, which throws `ForbiddenError` (HTTP 403). This runs no matter how the request arrives — UI, `curl`, or a script.
 - Denied privileged mutations are themselves audited as `ACCESS_DENIED`.
@@ -201,6 +211,8 @@ The test setup creates `prisma/test.db`, migrates and seeds it, then runs:
 | ----------------------------- | ------ |
 | `tests/rbac.test.ts`          | Role → permission mapping; admin has everything |
 | `tests/kyc-service.test.ts`   | Support Agent can view but not approve/reject/escalate; Analyst can approve and reject; comment rules; invalid transitions; stale-version conflict; audit event written with the change; audit rows immutable at the DB level |
+| `tests/refund-service.test.ts` | Refund action gated by `refund:approve`; `REFUND_APPROVED` audit event; invalid/duplicate refund handling |
+| `tests/secondary-approval.test.ts` | HIGH-risk `REJECT` files a request (`KYC_REJECTION_REQUESTED`, `PENDING_SECONDARY_APPROVAL`); manager approve → `REJECTED` / deny → prior status; requester can't self-approve; LOW/MEDIUM unchanged |
 | `tests/api-authorization.test.ts` | Calls the real route handlers as each user: unauthorized mutation → 403 + `ACCESS_DENIED` audit; unauthorized audit-log read → 403; authorized mutation → 200; invalid payload → 400 |
 
 ## Adding another application
