@@ -45,7 +45,7 @@ const COLUMNS: Column<KycCaseSummary, CaseSortKey>[] = [
   },
 ];
 
-const STATUS_OPTIONS = CASE_STATUSES.map((value) => ({ value, label: humanize(value) }));
+const STATUS_OPTIONS = [{ value: "OPEN", label: "Open" }, ...CASE_STATUSES.map((value) => ({ value, label: humanize(value) }))];
 const RISK_OPTIONS = RISK_LEVELS.map((value) => ({ value, label: humanize(value) }));
 
 /** Filter/sort state lives in the URL so views are shareable and the server does the querying. */
@@ -68,13 +68,13 @@ export function KycQueueTable({ cases, query }: { cases: KycCaseSummary[]; query
 
   const onSearch = useCallback((search: string) => setParams({ search }), [setParams]);
   const sort: SortState<CaseSortKey> = { key: query.sortBy ?? "riskScore", direction: query.sortDir ?? "desc" };
-  const hasFilters = Boolean(query.status || query.riskLevel || query.search);
+  const hasFilters = Boolean(query.status || query.statuses || query.riskLevel || query.search);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput value={query.search ?? ""} onChange={onSearch} placeholder="Search by customer name or ID…" />
-        <SelectFilter label="Status" value={query.status ?? ""} options={STATUS_OPTIONS} onChange={(status) => setParams({ status })} />
+        <SelectFilter label="Status" value={query.status ?? (query.statuses ? "OPEN" : "")} options={STATUS_OPTIONS} onChange={(status) => setParams({ status })} />
         <SelectFilter
           label="Risk"
           value={query.riskLevel ?? ""}

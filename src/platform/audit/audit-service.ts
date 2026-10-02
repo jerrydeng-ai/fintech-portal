@@ -4,7 +4,10 @@ import { requirePermission } from "@/platform/rbac/guard";
 import { findAuditEvents, findAuditEventsForResource, findDistinctAuditValues } from "./audit-repository";
 import type { AuditEventDto, AuditLogFilters } from "./types";
 
-export async function listAuditLog(actor: AuthenticatedUser, filters: AuditLogFilters = {}): Promise<AuditEventDto[]> {
+export async function listAuditLog(
+  actor: AuthenticatedUser,
+  filters: AuditLogFilters = {},
+): Promise<{ events: AuditEventDto[]; total: number }> {
   await requirePermission(actor, "audit:view");
   return findAuditEvents(prisma, filters);
 }

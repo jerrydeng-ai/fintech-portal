@@ -46,6 +46,20 @@ describe("API authorization (bypassing the UI)", () => {
     expect((await response.json()).case.status).toBe("APPROVED");
   });
 
+  it("rejects mutations carrying a cross-site Origin header", async () => {
+    actAs("usr_alice");
+    const response = await POST(
+      new Request("http://localhost/api/kyc/cases/KYC-2016/actions", {
+        method: "POST",
+        headers: { Origin: "https://evil.example" },
+        body: JSON.stringify({ action: "APPROVE" }),
+      }),
+      { params: Promise.resolve({ caseId: "KYC-2016" }) },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
   it("returns 400 for invalid payloads", async () => {
     actAs("usr_alice");
     const response = await postAction("KYC-2015", { action: "DELETE_EVERYTHING" });

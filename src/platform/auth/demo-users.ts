@@ -8,3 +8,8 @@ export const DEMO_USERS: readonly AuthenticatedUser[] = [
 
 export const DEFAULT_DEMO_USER_ID = "usr_alice";
 export const DEMO_USER_COOKIE = "demo_user_id";
+
+/** Password-less demo auth is on in development; production requires DEMO_AUTH="true". */
+export function demoAuthEnabled(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.DEMO_AUTH === "true";
+}

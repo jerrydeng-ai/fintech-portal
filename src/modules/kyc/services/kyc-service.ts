@@ -23,7 +23,7 @@ import {
   type QueueStats,
   type ReviewAction,
 } from "../types";
-import { REVIEW_ACTION_CONFIG, canTransition } from "./workflow";
+import { OPEN_STATUSES, REVIEW_ACTION_CONFIG, canTransition } from "./workflow";
 
 export const KYC_RESOURCE_TYPE = "KYC_CASE";
 const MAX_COMMENT_LENGTH = 2000;
@@ -38,8 +38,10 @@ export function parseCaseQuery(input: Record<string, string | string[] | undefin
     const value = input[key];
     return Array.isArray(value) ? value[0] : value;
   };
+  const status = first("status");
   return {
-    status: pick(CASE_STATUSES, first("status")),
+    status: pick(CASE_STATUSES, status),
+    statuses: status === "OPEN" ? OPEN_STATUSES : undefined,
     riskLevel: pick(RISK_LEVELS, first("riskLevel")),
     search: first("search")?.slice(0, 100) || undefined,
     sortBy: pick(CASE_SORT_KEYS, first("sortBy")) ?? "riskScore",

@@ -37,7 +37,11 @@ export type AuditLogFilters = {
   resourceType?: string;
   userId?: string;
   limit?: number;
+  offset?: number;
 };
+
+/** Actor recorded for events produced by automated systems rather than people. */
+export const SYSTEM_ACTOR = { id: "system", name: "Screening Engine" } as const;
 
 /** Platform-level actions emitted by shared services. */
 export const PLATFORM_AUDIT_ACTIONS = {

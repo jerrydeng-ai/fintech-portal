@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Session } from "@/platform/auth/session";
 import type { AuthenticatedUser } from "@/platform/auth/types";
 import { buildNavigation } from "./navigation";
+import { MobileNav } from "./MobileNav";
 import { Sidebar } from "./Sidebar";
 import type { ToolModule } from "./types";
 import { UserSwitcher } from "./UserSwitcher";
@@ -36,8 +37,9 @@ export function AppShell({
               DEMO · auth: {session.authProvider}
             </span>
           </div>
-          <UserSwitcher currentUser={session.user} users={switchableUsers} />
+          {switchableUsers.length > 0 && <UserSwitcher currentUser={session.user} users={switchableUsers} />}
         </header>
+        <MobileNav sections={sections} />
         <main className="flex-1 px-6 py-6 lg:px-8">{children}</main>
       </div>
     </div>

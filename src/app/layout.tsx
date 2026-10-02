@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { demoAuthEnabled } from "@/platform/auth/demo-users";
 import { getSession } from "@/platform/auth/session";
 import { SessionProvider } from "@/platform/auth/SessionProvider";
 import { listUsers } from "@/platform/auth/user-repository";
@@ -23,7 +24,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         {session ? (
           <SessionProvider session={{ user: session.user, permissions: session.permissions }}>
-            <AppShell session={session} switchableUsers={users} modules={TOOL_MODULES}>
+            <AppShell session={session} switchableUsers={demoAuthEnabled() ? users : []} modules={TOOL_MODULES}>
               {children}
             </AppShell>
           </SessionProvider>

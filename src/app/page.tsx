@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   const [stats, highRisk, recentEvents] = await Promise.all([
     canViewKyc ? getQueueStats(user) : null,
     canViewKyc ? listCases(user, { riskLevel: "HIGH", sortBy: "riskScore", sortDir: "desc" }) : [],
-    canViewAudit ? listAuditLog(user, { limit: 6 }) : [],
+    canViewAudit ? listAuditLog(user, { limit: 6 }).then((r) => r.events) : [],
   ]);
   const openHighRisk = highRisk.filter((c) => c.status !== "APPROVED" && c.status !== "REJECTED").slice(0, 5);
 

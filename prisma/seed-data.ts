@@ -1,4 +1,5 @@
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
+import { SYSTEM_ACTOR } from "../src/platform/audit/types";
 import { DEMO_USERS } from "../src/platform/auth/demo-users";
 import { riskLevelForScore } from "../src/modules/kyc/services/risk";
 import type { CaseStatus } from "../src/modules/kyc/types";
@@ -160,7 +161,7 @@ const CASES: SeedCase[] = [
 
 const HOUR = 60 * 60 * 1000;
 
-export async function seedDatabase(prisma: PrismaClient, now = new Date()): Promise<void> {
+export async function seedDatabase(prisma: PrismaClient | Prisma.TransactionClient, now = new Date()): Promise<void> {
   const ago = (hours: number) => new Date(now.getTime() - hours * HOUR);
 
   for (const user of DEMO_USERS) {
@@ -207,8 +208,8 @@ export async function seedDatabase(prisma: PrismaClient, now = new Date()): Prom
     await prisma.auditEvent.create({
       data: {
         timestamp: ago(seed.flaggedHoursAgo),
-        userId: "system",
-        userName: "Screening Engine",
+        userId: SYSTEM_ACTOR.id,
+        userName: SYSTEM_ACTOR.name,
         userRole: "SYSTEM",
         action: "KYC_CASE_FLAGGED",
         resourceType: "KYC_CASE",

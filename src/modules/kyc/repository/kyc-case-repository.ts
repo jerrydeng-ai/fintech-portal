@@ -82,7 +82,7 @@ export async function findCases(db: DbClient, query: CaseQuery): Promise<KycCase
   const search = query.search?.trim();
   const rows = await db.kycCase.findMany({
     where: {
-      status: query.status,
+      status: query.status ?? (query.statuses ? { in: [...query.statuses] } : undefined),
       riskLevel: query.riskLevel,
       // SQLite LIKE is case-insensitive for ASCII; on PostgreSQL add `mode: "insensitive"`.
       OR: search

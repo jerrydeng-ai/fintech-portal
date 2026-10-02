@@ -50,17 +50,27 @@ export async function findAuditEventsForResource(
   return events.map(toDto);
 }
 
-export async function findAuditEvents(db: DbClient, filters: AuditLogFilters): Promise<AuditEventDto[]> {
-  const events = await db.auditEvent.findMany({
-    where: {
-      action: filters.action || undefined,
-      resourceType: filters.resourceType || undefined,
-      userId: filters.userId || undefined,
-    },
-    orderBy: { timestamp: "desc" },
-    take: filters.limit ?? 200,
-  });
-  return events.map(toDto);
+const whereFor = (filters: AuditLogFilters) => ({
+  action: filters.action || undefined,
+  resourceType: filters.resourceType || undefined,
+  userId: filters.userId || undefined,
+});
+
+export async function findAuditEvents(
+  db: DbClient,
+  filters: AuditLogFilters,
+): Promise<{ events: AuditEventDto[]; total: number }> {
+  const where = whereFor(filters);
+  const [events, total] = await Promise.all([
+    db.auditEvent.findMany({
+      where,
+      orderBy: { timestamp: "desc" },
+      take: filters.limit ?? 200,
+      skip: filters.offset ?? 0,
+    }),
+    db.auditEvent.count({ where }),
+  ]);
+  return { events: events.map(toDto), total };
 }
 
 export async function findDistinctAuditValues(db: DbClient): Promise<{ actions: string[]; resourceTypes: string[] }> {

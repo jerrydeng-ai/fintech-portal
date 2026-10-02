@@ -29,7 +29,7 @@ export default async function KycQueuePage({
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Pending" value={stats.pending} href="/kyc?status=PENDING" />
         <StatCard label="In Review" value={stats.inReview} href="/kyc?status=IN_REVIEW" accent="blue" />
-        <StatCard label="High Risk (open)" value={stats.highRiskOpen} href="/kyc?riskLevel=HIGH" accent="red" />
+        <StatCard label="High Risk (open)" value={stats.highRiskOpen} href="/kyc?riskLevel=HIGH&status=OPEN" accent="red" />
         <StatCard label="Escalated" value={stats.escalated} href="/kyc?status=ESCALATED" accent="amber" />
       </div>
       <KycQueueTable cases={cases} query={query} />

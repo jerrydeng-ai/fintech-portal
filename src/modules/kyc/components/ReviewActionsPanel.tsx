@@ -51,19 +51,24 @@ export function ReviewActionsPanel({
     if (!pendingAction) return;
     setBusy(true);
     setError(null);
-    const response = await fetch(`/api/kyc/cases/${caseId}/actions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: pendingAction, comment, expectedVersion: version }),
-    });
-    setBusy(false);
-    if (!response.ok) {
-      const body: ApiErrorBody = await response.json();
-      setError(body.error.message);
-      return;
+    try {
+      const response = await fetch(`/api/kyc/cases/${caseId}/actions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: pendingAction, comment, expectedVersion: version }),
+      });
+      if (!response.ok) {
+        const body: ApiErrorBody | null = await response.json().catch(() => null);
+        setError(body?.error?.message ?? "The server rejected this decision. Please try again.");
+        return;
+      }
+      close();
+      router.refresh();
+    } catch {
+      setError("Network error — the request could not be sent. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    close();
-    router.refresh();
   }
 
   const isClosed = !REVIEW_ACTIONS.some((action) => canTransition(status, action));

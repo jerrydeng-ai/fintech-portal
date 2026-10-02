@@ -12,6 +12,8 @@ export type CaseSortKey = (typeof CASE_SORT_KEYS)[number];
 
 export type CaseQuery = {
   status?: CaseStatus;
+  /** Multi-status filter, e.g. "all open" (PENDING + IN_REVIEW + ESCALATED). */
+  statuses?: readonly CaseStatus[];
   riskLevel?: RiskLevel;
   search?: string;
   sortBy?: CaseSortKey;

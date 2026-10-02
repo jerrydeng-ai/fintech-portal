@@ -5,7 +5,7 @@ import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { formatDateTime } from "@/lib/format";
 import { getAuditFilterOptions, listAuditLog } from "@/platform/audit/audit-service";
-import type { AuditEventDto } from "@/platform/audit/types";
+import { SYSTEM_ACTOR, type AuditEventDto } from "@/platform/audit/types";
 import { requireUser } from "@/platform/auth/session";
 import { listUsers } from "@/platform/auth/user-repository";
 import { prisma } from "@/platform/database/client";
@@ -14,6 +14,8 @@ import { hasPermission } from "@/platform/rbac/permissions";
 import { AuditFilters } from "./AuditFilters";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 50;
 
 const RESOURCE_LINKS: Record<string, (id: string) => string> = {
   KYC_CASE: (id) => `/kyc/${id}`,
@@ -63,11 +65,28 @@ export default async function AuditLogPage({
   }
 
   const params = await searchParams;
-  const [events, options, users] = await Promise.all([
-    listAuditLog(user, { action: params.action, resourceType: params.resourceType, userId: params.userId }),
+  const page = Math.max(1, Math.floor(Number(params.page)) || 1);
+  const [{ events, total }, options, users] = await Promise.all([
+    listAuditLog(user, {
+      action: params.action,
+      resourceType: params.resourceType,
+      userId: params.userId,
+      limit: PAGE_SIZE,
+      offset: (page - 1) * PAGE_SIZE,
+    }),
     getAuditFilterOptions(user),
     listUsers(prisma),
   ]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageHref = (target: number) => {
+    const query = new URLSearchParams();
+    for (const key of ["action", "resourceType", "userId"]) {
+      const value = params[key];
+      if (value) query.set(key, value);
+    }
+    if (target > 1) query.set("page", String(target));
+    return `/audit${query.size ? `?${query}` : ""}`;
+  };
 
   return (
     <>
@@ -76,7 +95,7 @@ export default async function AuditLogPage({
         title="Audit Log"
         description="Append-only record of every privileged action across all internal tools. Rows cannot be edited or deleted — the database rejects it."
       />
-      <AuditFilters actions={options.actions} resourceTypes={options.resourceTypes} users={users} />
+      <AuditFilters actions={options.actions} resourceTypes={options.resourceTypes} users={[...users, SYSTEM_ACTOR]} />
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -136,6 +155,23 @@ export default async function AuditLogPage({
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-sm text-slate-600">
+        <span>
+          Page {page} of {totalPages} · {total} event{total === 1 ? "" : "s"}
+        </span>
+        <div className="flex gap-2">
+          {page > 1 && (
+            <Link href={pageHref(page - 1)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium hover:bg-slate-50">
+              ← Newer
+            </Link>
+          )}
+          {page < totalPages && (
+            <Link href={pageHref(page + 1)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium hover:bg-slate-50">
+              Older →
+            </Link>
+          )}
+        </div>
       </div>
     </>
   );

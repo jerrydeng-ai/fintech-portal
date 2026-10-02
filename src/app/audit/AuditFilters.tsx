@@ -20,6 +20,7 @@ export function AuditFilters({
     const next = new URLSearchParams(searchParams.toString());
     if (value) next.set(key, value);
     else next.delete(key);
+    next.delete("page");
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
   }
 

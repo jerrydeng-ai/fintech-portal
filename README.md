@@ -125,6 +125,8 @@ interface AuthProvider {
 The demo ships `demoAuthProvider`, which reads a `demo_user_id` cookie set by the user switcher (`POST /api/auth/switch`). Everything else in the app calls `getCurrentUser()` / `requireUser()` and never touches the cookie.
 
 > **Demo only.** A cookie anyone can set is not authentication. In production, implement `AuthProvider` against your IdP (Okta, Auth0, Entra ID via OIDC — e.g. NextAuth/Auth.js or the vendor SDK), map IdP groups to roles, delete the switcher route, and change `getAuthProvider()` in `session.ts`. No module code changes.
+>
+> As a safety net, the demo provider and the `/api/auth/switch` route are **automatically disabled when `NODE_ENV=production`** unless `DEMO_AUTH="true"` is set explicitly — an accident or a forgotten build can't silently ship password-less admin access. API mutations also require a same-site `Origin` (CSRF defence for cookie-based sessions) and the demo cookie is `Secure` in production.
 
 ## Authorization (RBAC)
 
@@ -220,6 +222,7 @@ What you **write**:
 | ------------- | -------------------------------------- | ---------- |
 | Authentication| Cookie-based user switcher             | OIDC/SAML via company IdP; short-lived sessions; group → role mapping |
 | Database      | SQLite file, triggers for immutability | Managed PostgreSQL; DB role without UPDATE/DELETE on audit; backups/PITR |
+| CSRF          | Same-site `Origin` check on mutations + `SameSite=Lax` cookie | SameSite=Strict or token-based CSRF for high-sensitivity tools |
 | Audit         | Same database as app data              | Additionally stream to WORM storage / SIEM; retention policy |
 | Data          | 20 fictional customers                 | Real screening feed (webhook/queue) creating cases |
 | Assignment    | Pre-seeded analysts                    | Claim/assign workflow, SLAs, four-eyes approval for high risk |

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
-import { getCase, getCaseHistory, listCases, performReviewAction } from "@/modules/kyc/services/kyc-service";
+import { getCase, getCaseHistory, listCases, parseCaseQuery, performReviewAction } from "@/modules/kyc/services/kyc-service";
 import { listAuditLog } from "@/platform/audit/audit-service";
 import { prisma } from "@/platform/database/client";
 import { alice, bob, carol } from "./helpers";
@@ -60,6 +60,26 @@ describe("KYC service authorization", () => {
       performReviewAction(alice, "KYC-2010", { action: "APPROVE", expectedVersion: 99 }),
     ).rejects.toBeInstanceOf(ConflictError);
     expect(await prisma.auditEvent.count()).toBe(before);
+  });
+});
+
+describe("Queue filtering and audit pagination", () => {
+  it("status=OPEN returns only open cases", async () => {
+    const cases = await listCases(alice, parseCaseQuery({ status: "OPEN", riskLevel: "HIGH" }));
+    expect(cases.length).toBeGreaterThan(0);
+    expect(cases.every((c) => ["PENDING", "IN_REVIEW", "ESCALATED"].includes(c.status))).toBe(true);
+    expect(cases.every((c) => c.riskLevel === "HIGH")).toBe(true);
+    const closed = await listCases(alice, parseCaseQuery({ status: "OPEN" }));
+    expect(closed.some((c) => c.status === "APPROVED" || c.status === "REJECTED")).toBe(false);
+  });
+
+  it("audit log returns a total alongside each page", async () => {
+    const { events, total } = await listAuditLog(alice, { limit: 3 });
+    expect(events).toHaveLength(3);
+    expect(total).toBeGreaterThan(3);
+    const page2 = await listAuditLog(alice, { limit: 3, offset: 3 });
+    expect(page2.events[0].eventId).not.toBe(events[0].eventId);
+    expect(page2.total).toBe(total);
   });
 });
 
