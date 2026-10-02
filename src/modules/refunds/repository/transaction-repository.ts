@@ -70,12 +70,17 @@ export async function findTransactionById(db: DbClient, id: string): Promise<Ref
 }
 
 export async function countTransactionStats(db: DbClient) {
-  const [settled, refunded, refundedAgg] = await Promise.all([
+  const [settled, refunded, byCurrency] = await Promise.all([
     db.transaction.count({ where: { status: "SETTLED" } }),
     db.transaction.count({ where: { status: "REFUNDED" } }),
-    db.transaction.aggregate({ where: { status: "REFUNDED" }, _sum: { amountCents: true } }),
+    // Sums stay per-currency — mixing currencies in one total would be meaningless.
+    db.transaction.groupBy({ by: ["currency"], where: { status: "REFUNDED" }, _sum: { amountCents: true } }),
   ]);
-  return { settled, refunded, refundedCents: refundedAgg._sum.amountCents ?? 0 };
+  return {
+    settled,
+    refunded,
+    refundedByCurrency: byCurrency.map((g) => ({ currency: g.currency, cents: g._sum.amountCents ?? 0 })),
+  };
 }
 
 /** Refund is only applied while the transaction is still SETTLED — concurrent refunds can't both win. */

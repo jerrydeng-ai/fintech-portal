@@ -29,7 +29,11 @@ export default async function RefundOperationsPage({
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         <StatCard label="Settled" value={stats.settled} href="/refunds?status=SETTLED" hint="Eligible for refund" />
         <StatCard label="Refunded" value={stats.refunded} href="/refunds?status=REFUNDED" accent="blue" />
-        <StatCard label="Refunded volume" value={`USD ${(stats.refundedCents / 100).toFixed(2)}`} accent="amber" />
+        <StatCard
+          label="Refunded volume"
+          value={stats.refundedByCurrency.map((g) => `${g.currency} ${(g.cents / 100).toFixed(2)}`).join(" · ") || "—"}
+          accent="amber"
+        />
       </div>
       <RefundQueueTable transactions={transactions} query={query} />
     </>

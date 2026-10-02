@@ -197,60 +197,8 @@ export async function seedDatabase(prisma: PrismaClient | Prisma.TransactionClie
   }
   const users = new Map(DEMO_USERS.map((u) => [u.id, u]));
 
-  for (const [index, seed] of TRANSACTIONS.entries()) {
-    const txnId = `TXN-${9001 + index}`;
-    await prisma.transaction.create({
-      data: {
-        id: txnId,
-        customerId: seed.customerId,
-        customerName: seed.name,
-        merchantRef: seed.merchantRef,
-        amountCents: seed.amountCents,
-        currency: "USD",
-        method: seed.method,
-        status: seed.status,
-        createdAt: ago(seed.hoursAgo),
-        refundedAt: seed.refund ? ago(seed.refund.hoursAgo) : null,
-        refundedById: seed.refund?.by ?? null,
-        refundedByName: seed.refund ? users.get(seed.refund.by)!.name : null,
-        refundReason: seed.refund?.reason ?? null,
-      },
-    });
-    if (seed.refund) {
-      const actor = users.get(seed.refund.by)!;
-      await prisma.auditEvent.create({
-        data: {
-          timestamp: ago(seed.refund.hoursAgo),
-          userId: actor.id,
-          userName: actor.name,
-          userRole: actor.role,
-          action: "REFUND_APPROVED",
-          resourceType: "TRANSACTION",
-          resourceId: txnId,
-          previousState: JSON.stringify({ status: "SETTLED" }),
-          newState: JSON.stringify({ status: "REFUNDED" }),
-          metadata: JSON.stringify({ customerId: seed.customerId, customerName: seed.name, amountCents: seed.amountCents, currency: "USD", comment: seed.refund.reason }),
-        },
-      });
-    }
-  }
+  await seedExtras(prisma, now);
 
-  // Audit is platform-wide, not KYC-specific: seed a feature-flag event as a second example.
-  const carol = users.get("usr_carol")!;
-  await prisma.auditEvent.create({
-    data: {
-      timestamp: ago(16),
-      userId: carol.id,
-      userName: carol.name,
-      userRole: carol.role,
-      action: "FEATURE_FLAG_CHANGED",
-      resourceType: "FEATURE_FLAG",
-      resourceId: "kyc_two_step_rejection",
-      previousState: JSON.stringify({ enabled: false }),
-      newState: JSON.stringify({ enabled: true }),
-      metadata: JSON.stringify({ comment: "Enabled two-step rejection for HIGH-risk KYC cases." }),
-    },
-  });
 
   for (const [index, seed] of CASES.entries()) {
     const caseId = `KYC-${2001 + index}`;
@@ -319,4 +267,75 @@ export async function seedDatabase(prisma: PrismaClient | Prisma.TransactionClie
       });
     }
   }
+}
+
+/** Sync demo users on an existing (migrated) database — new users inserted, roles/titles updated. */
+export async function syncDemoUsers(prisma: Db) {
+  for (const user of DEMO_USERS) {
+    await prisma.user.upsert({ where: { id: user.id }, update: { role: user.role, title: user.title }, create: user });
+  }
+}
+
+type Db = Pick<PrismaClient, "transaction" | "auditEvent" | "user">;
+
+/** Transactions + platform-wide audit events, seeded only when the Transaction table is empty. */
+export async function seedExtras(prisma: Db, now: Date = new Date()) {
+  if ((await prisma.transaction.count()) > 0) return;
+  const ago = (hours: number) => new Date(now.getTime() - hours * HOUR);
+  const users = new Map(DEMO_USERS.map((u) => [u.id, u]));
+
+  for (const [index, seed] of TRANSACTIONS.entries()) {
+    const txnId = `TXN-${9001 + index}`;
+    await prisma.transaction.create({
+      data: {
+        id: txnId,
+        customerId: seed.customerId,
+        customerName: seed.name,
+        merchantRef: seed.merchantRef,
+        amountCents: seed.amountCents,
+        currency: "USD",
+        method: seed.method,
+        status: seed.status,
+        createdAt: ago(seed.hoursAgo),
+        refundedAt: seed.refund ? ago(seed.refund.hoursAgo) : null,
+        refundedById: seed.refund?.by ?? null,
+        refundedByName: seed.refund ? users.get(seed.refund.by)!.name : null,
+        refundReason: seed.refund?.reason ?? null,
+      },
+    });
+    if (seed.refund) {
+      const actor = users.get(seed.refund.by)!;
+      await prisma.auditEvent.create({
+        data: {
+          timestamp: ago(seed.refund.hoursAgo),
+          userId: actor.id,
+          userName: actor.name,
+          userRole: actor.role,
+          action: "REFUND_APPROVED",
+          resourceType: "TRANSACTION",
+          resourceId: txnId,
+          previousState: JSON.stringify({ status: "SETTLED" }),
+          newState: JSON.stringify({ status: "REFUNDED" }),
+          metadata: JSON.stringify({ customerId: seed.customerId, customerName: seed.name, amountCents: seed.amountCents, currency: "USD", comment: seed.refund.reason }),
+        },
+      });
+    }
+  }
+
+  // Audit is platform-wide, not KYC-specific: seed a feature-flag event as a second example.
+  const carol = users.get("usr_carol")!;
+  await prisma.auditEvent.create({
+    data: {
+      timestamp: ago(16),
+      userId: carol.id,
+      userName: carol.name,
+      userRole: carol.role,
+      action: "FEATURE_FLAG_CHANGED",
+      resourceType: "FEATURE_FLAG",
+      resourceId: "kyc_two_step_rejection",
+      previousState: JSON.stringify({ enabled: false }),
+      newState: JSON.stringify({ enabled: true }),
+      metadata: JSON.stringify({ comment: "Enabled two-step rejection for HIGH-risk KYC cases." }),
+    },
+  });
 }

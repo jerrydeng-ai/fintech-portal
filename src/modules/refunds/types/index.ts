@@ -26,4 +26,4 @@ export type RefundTransactionDto = {
   refundReason: string | null;
 };
 
-export type TransactionStats = { settled: number; refunded: number; refundedCents: number };
+export type TransactionStats = { settled: number; refunded: number; refundedByCurrency: { currency: string; cents: number }[] };
