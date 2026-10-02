@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PERMISSIONS, hasPermission } from "@/platform/rbac/permissions";
+import { hasPermission } from "@/platform/rbac/permissions";
 import { alice, bob, carol } from "./helpers";
 
 describe("RBAC role → permission mapping", () => {
@@ -11,14 +11,18 @@ describe("RBAC role → permission mapping", () => {
     }
   });
 
-  it("Compliance Analyst can review, decide and view audit but not administer", () => {
+  it("Compliance Analyst can review, decide and view audit but not self-approve rejections", () => {
     for (const p of ["kyc:view", "kyc:approve", "kyc:reject", "kyc:escalate", "audit:view"] as const) {
       expect(hasPermission(alice, p)).toBe(true);
     }
+    expect(hasPermission(alice, "kyc:approve_rejection")).toBe(false);
     expect(hasPermission(alice, "admin:manage")).toBe(false);
   });
 
-  it("Admin has all permissions", () => {
-    for (const p of PERMISSIONS) expect(hasPermission(carol, p)).toBe(true);
+  it("Compliance Manager has analyst permissions plus secondary approval", () => {
+    for (const p of ["kyc:view", "kyc:approve", "kyc:reject", "kyc:escalate", "kyc:approve_rejection", "audit:view"] as const) {
+      expect(hasPermission(carol, p)).toBe(true);
+    }
+    expect(hasPermission(carol, "admin:manage")).toBe(false);
   });
 });

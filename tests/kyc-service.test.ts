@@ -67,7 +67,7 @@ describe("Queue filtering and audit pagination", () => {
   it("status=OPEN returns only open cases", async () => {
     const cases = await listCases(alice, parseCaseQuery({ status: "OPEN", riskLevel: "HIGH" }));
     expect(cases.length).toBeGreaterThan(0);
-    expect(cases.every((c) => ["PENDING", "IN_REVIEW", "ESCALATED"].includes(c.status))).toBe(true);
+    expect(cases.every((c) => ["PENDING", "IN_REVIEW", "ESCALATED", "PENDING_SECONDARY_APPROVAL"].includes(c.status))).toBe(true);
     expect(cases.every((c) => c.riskLevel === "HIGH")).toBe(true);
     const closed = await listCases(alice, parseCaseQuery({ status: "OPEN" }));
     expect(closed.some((c) => c.status === "APPROVED" || c.status === "REJECTED")).toBe(false);

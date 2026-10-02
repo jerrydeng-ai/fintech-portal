@@ -49,7 +49,9 @@ export default async function CaseReviewPage({ params }: { params: Promise<{ cas
               caseId={kycCase.id}
               customerName={customer.fullName}
               status={kycCase.status}
+              riskLevel={kycCase.riskLevel}
               version={kycCase.version}
+              pending={kycCase.pending}
             />
             {!hasPermission(user, "kyc:approve") && (
               <div className="mt-4">

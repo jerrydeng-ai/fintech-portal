@@ -9,25 +9,41 @@ export const PERMISSIONS = [
   "kyc:approve",
   "kyc:reject",
   "kyc:escalate",
+  "kyc:approve_rejection",
+  "refund:view",
+  "refund:approve",
   "audit:view",
   "admin:manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
-export const ROLES = ["COMPLIANCE_ANALYST", "SUPPORT_AGENT", "ADMIN"] as const;
+export const ROLES = ["COMPLIANCE_ANALYST", "SUPPORT_AGENT", "COMPLIANCE_MANAGER", "ADMIN"] as const;
 
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
   COMPLIANCE_ANALYST: "Compliance Analyst",
   SUPPORT_AGENT: "Support Agent",
+  COMPLIANCE_MANAGER: "Compliance Manager",
   ADMIN: "Admin",
 };
 
+const ANALYST_PERMISSIONS: readonly Permission[] = [
+  "customer:view",
+  "kyc:view",
+  "kyc:approve",
+  "kyc:reject",
+  "kyc:escalate",
+  "refund:view",
+  "refund:approve",
+  "audit:view",
+];
+
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
-  SUPPORT_AGENT: ["customer:view", "kyc:view"],
-  COMPLIANCE_ANALYST: ["customer:view", "kyc:view", "kyc:approve", "kyc:reject", "kyc:escalate", "audit:view"],
+  SUPPORT_AGENT: ["customer:view", "kyc:view", "refund:view"],
+  COMPLIANCE_ANALYST: ANALYST_PERMISSIONS,
+  COMPLIANCE_MANAGER: [...ANALYST_PERMISSIONS, "kyc:approve_rejection"],
   ADMIN: PERMISSIONS,
 };
 

@@ -76,6 +76,14 @@ model KycCase {
   updatedAt            DateTime     @updatedAt
   riskFactors          RiskFactor[]
 
+  /// Two-step rejection for HIGH-risk cases: while a rejection awaits a
+  /// Compliance Manager's decision, these fields carry the pending request.
+  pendingAction        String?
+  pendingById          String?
+  pendingByName        String?
+  pendingComment       String?
+  pendingFromStatus    String?
+
   @@index([status])
   @@index([riskLevel])
 }
@@ -88,4 +96,24 @@ model RiskFactor {
   label       String
   points      Int
   description String?
+}
+
+/// Refunds module: card transactions eligible for refund operations.
+model Transaction {
+  id             String    @id
+  customerId     String
+  customerName   String
+  merchantRef    String
+  amountCents    Int
+  currency       String
+  method         String
+  status         String
+  createdAt      DateTime
+  refundedAt     DateTime?
+  refundedById   String?
+  refundedByName String?
+  refundReason   String?
+
+  @@index([status])
+  @@index([customerName])
 }

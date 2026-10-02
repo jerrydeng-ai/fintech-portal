@@ -5,6 +5,7 @@ const PLATFORM_NAV: NavItem[] = [
   { label: "Dashboard", href: "/", icon: "dashboard" },
   { label: "Audit Log", href: "/audit", icon: "audit", permission: "audit:view" },
   { label: "Architecture", href: "/architecture", icon: "architecture" },
+  { label: "Production Readiness", href: "/production-readiness", icon: "flag" },
 ];
 
 function visible(items: NavItem[], permissions: readonly Permission[]): NavItem[] {

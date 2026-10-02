@@ -56,6 +56,16 @@ function toDetail(row: CaseWithDetail): KycCaseDetail {
       pepScreening: row.pepScreening,
     },
     riskFactors: row.riskFactors.map((f) => ({ label: f.label, points: f.points, description: f.description })),
+    pending:
+      row.pendingAction === "REJECT" && row.pendingById && row.pendingByName && row.pendingFromStatus
+        ? {
+            action: "REJECT" as const,
+            byId: row.pendingById,
+            byName: row.pendingByName,
+            comment: row.pendingComment ?? "",
+            fromStatus: parseStatus(row.pendingFromStatus),
+          }
+        : null,
   };
 }
 
@@ -118,13 +128,45 @@ export async function countQueueStats(db: DbClient) {
  * Optimistic-concurrency update: only succeeds if nobody changed the case since `expectedVersion` was read.
  * Returns false when the row was modified concurrently.
  */
+export type PendingRejection = {
+  action: "REJECT";
+  byId: string;
+  byName: string;
+  comment: string;
+  fromStatus: CaseStatus;
+};
+
 export async function updateCaseStatus(
   db: DbClient,
-  params: { id: string; expectedVersion: number; status: CaseStatus; assignedAnalystId: string | null },
+  params: {
+    id: string;
+    expectedVersion: number;
+    status: CaseStatus;
+    assignedAnalystId?: string | null;
+    /** Set a pending rejection request, or pass "clear" to remove it. */
+    pending?: PendingRejection | "clear";
+  },
 ): Promise<boolean> {
+  const pendingData =
+    params.pending === undefined
+      ? {}
+      : params.pending === "clear" || params.pending == null
+        ? { pendingAction: null, pendingById: null, pendingByName: null, pendingComment: null, pendingFromStatus: null }
+        : {
+            pendingAction: params.pending.action,
+            pendingById: params.pending.byId,
+            pendingByName: params.pending.byName,
+            pendingComment: params.pending.comment,
+            pendingFromStatus: params.pending.fromStatus,
+          };
   const result = await db.kycCase.updateMany({
     where: { id: params.id, version: params.expectedVersion },
-    data: { status: params.status, assignedAnalystId: params.assignedAnalystId, version: { increment: 1 } },
+    data: {
+      status: params.status,
+      ...(params.assignedAnalystId !== undefined ? { assignedAnalystId: params.assignedAnalystId } : {}),
+      ...pendingData,
+      version: { increment: 1 },
+    },
   });
   return result.count === 1;
 }

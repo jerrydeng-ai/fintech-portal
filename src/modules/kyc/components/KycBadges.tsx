@@ -8,6 +8,7 @@ const STATUS_TONES: Record<CaseStatus, BadgeTone> = {
   APPROVED: "success",
   REJECTED: "danger",
   ESCALATED: "warning",
+  PENDING_SECONDARY_APPROVAL: "info",
 };
 
 const RISK_TONES: Record<RiskLevel, BadgeTone> = { LOW: "success", MEDIUM: "warning", HIGH: "danger" };

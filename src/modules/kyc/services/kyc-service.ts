@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAuditEvent } from "@/platform/audit/audit-recorder";
 import { listResourceHistory } from "@/platform/audit/audit-service";
 import type { AuditEventDto } from "@/platform/audit/types";
@@ -18,12 +18,14 @@ import {
   REVIEW_ACTIONS,
   RISK_LEVELS,
   type CaseQuery,
+  type CaseStatus,
   type KycCaseDetail,
   type KycCaseSummary,
   type QueueStats,
   type ReviewAction,
 } from "../types";
-import { OPEN_STATUSES, REVIEW_ACTION_CONFIG, canTransition } from "./workflow";
+import { OPEN_STATUSES, REVIEW_ACTION_CONFIG, canTransition, requiresSecondaryApproval } from "./workflow";
+import type { PendingRejection } from "../repository/kyc-case-repository";
 
 export const KYC_RESOURCE_TYPE = "KYC_CASE";
 const MAX_COMMENT_LENGTH = 2000;
@@ -117,27 +119,52 @@ export async function performReviewAction(
       throw new ConflictError(`Cannot ${config.label.toLowerCase()} a case that is ${current.status}`);
     }
 
+    // Resolve the transition: HIGH-risk rejections file a request instead of closing the case,
+    // and the secondary-approval actions consume that request.
+    let targetStatus: CaseStatus;
+    let auditAction = config.auditAction;
+    let pending: PendingRejection | "clear" | undefined;
+    let requestedBy: string | null = null;
+
+    if (input.action === "REJECT" && requiresSecondaryApproval(current.riskLevel)) {
+      targetStatus = "PENDING_SECONDARY_APPROVAL";
+      auditAction = "KYC_REJECTION_REQUESTED";
+      pending = { action: "REJECT", byId: actor.id, byName: actor.name, comment: input.comment, fromStatus: current.status };
+    } else if (input.action === "APPROVE_REJECTION" || input.action === "DENY_REJECTION") {
+      if (!current.pending) throw new ConflictError("There is no rejection request pending on this case");
+      if (input.action === "APPROVE_REJECTION" && current.pending.byId === actor.id) {
+        throw new ForbiddenError("You cannot approve your own rejection request — a different Compliance Manager must review it");
+      }
+      targetStatus = input.action === "APPROVE_REJECTION" ? "REJECTED" : current.pending.fromStatus;
+      requestedBy = current.pending.byName;
+      pending = "clear";
+    } else {
+      targetStatus = config.targetStatus!;
+    }
+
     const assignedAnalystId = (await findAssignedAnalystId(tx, caseId)) ?? actor.id;
     const updated = await updateCaseStatus(tx, {
       id: caseId,
       expectedVersion: current.version,
-      status: config.targetStatus,
+      status: targetStatus,
       assignedAnalystId,
+      pending,
     });
     if (!updated) throw new ConflictError("This case was updated by someone else. Refresh and try again.");
 
     const auditEvent = await recordAuditEvent(tx, {
       actor,
-      action: config.auditAction,
+      action: auditAction,
       resourceType: KYC_RESOURCE_TYPE,
       resourceId: caseId,
       previousState: { status: current.status },
-      newState: { status: config.targetStatus },
+      newState: { status: targetStatus },
       metadata: {
         customerId: current.customerId,
         customerName: current.customerName,
         riskScore: current.riskScore,
         comment: input.comment || null,
+        requestedBy,
       },
     });
 
