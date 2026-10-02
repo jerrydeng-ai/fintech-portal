@@ -203,18 +203,28 @@ The test setup creates `prisma/test.db`, migrates and seeds it, then runs:
 | `tests/kyc-service.test.ts`   | Support Agent can view but not approve/reject/escalate; Analyst can approve and reject; comment rules; invalid transitions; stale-version conflict; audit event written with the change; audit rows immutable at the DB level |
 | `tests/api-authorization.test.ts` | Calls the real route handlers as each user: unauthorized mutation → 403 + `ACCESS_DENIED` audit; unauthorized audit-log read → 403; authorized mutation → 200; invalid payload → 400 |
 
-## Adding internal tool #2 (e.g. Refund Operations)
+## Adding another application
+
+This is the pay-off of the platform split. Refund Operations — a real second tool, ~600 lines in `src/modules/refunds/` plus routes and tests — was added without touching the KYC module. The same checklist applies to tool #3, #4, …
 
 What you **reuse unchanged**: SSO/auth, RBAC engine and guards, audit recorder and the global audit log, transactions, app shell + navigation, DataTable / filters / badges / confirmation dialog / audit timeline, API error handling, test harness.
 
-What you **write**:
+What you **write** (six steps):
 
-1. Permissions — add `refund:view`, `refund:approve` to `permissions.ts` and map them to roles.
-2. Schema — a `Refund` model + migration.
-3. `src/modules/refunds/` — `types`, `repository`, `services` (call `requirePermission` and `recordAuditEvent` with `resourceType: "REFUND"`, `action: "REFUND_APPROVED"`), `components`, `module.ts`.
-4. Routes — `src/app/refunds/...` pages and `src/app/api/refunds/...` handlers using `withApiHandler`.
-5. Register it — add `refundsModule` to `TOOL_MODULES` in `src/app/tool-registry.ts`. Navigation, permission-gated links and audit log filters pick it up automatically.
-6. Tests — copy the authorization suite pattern.
+| Step | Work | Typical effort |
+| ---- | ---- | -------------- |
+| 1. Permissions | Add `refund:view`, `refund:approve` to `permissions.ts` and map them to roles | Minutes |
+| 2. Schema | A `Refund`/`Transaction` model + migration | Minutes |
+| 3. Module | `src/modules/refunds/` — `types`, `repository`, `services` (call `requirePermission` and `recordAuditEvent` with `resourceType: "REFUND"`, `action: "REFUND_APPROVED"`), `components`, `module.ts` | The bulk of the work — business logic only |
+| 4. Routes | `src/app/refunds/...` pages and `src/app/api/refunds/...` handlers using `withApiHandler` | Mostly mechanical — follows the KYC pattern |
+| 5. Register | Add `refundsModule` to `TOOL_MODULES` in `src/app/tool-registry.ts`. Navigation, permission-gated links and audit log filters pick it up automatically | One line |
+| 6. Tests | Copy the authorization suite pattern | Small — the harness is shared |
+
+**Estimated effort for a comparable tool** (list → details → one audited action):
+
+- With an AI engineer like Devin: **one session** — a single working session (~1–2 hours elapsed) produced the Refund Operations module, routes, seed data and tests in this repo, ready for human review.
+- Hand-written: roughly **1–2 engineering days**, almost all of it step 3–4 — the platform pieces (auth, RBAC, audit, shell, components) cost nothing per app.
+- What scales is steps 1–6; what doesn't scale is platform work, and it's already done.
 
 ## Demo limitations and production changes
 
