@@ -26,7 +26,7 @@ function postAction(caseId: string, body: unknown) {
 describe("API authorization (bypassing the UI)", () => {
   beforeEach(() => cookieJar.clear());
 
-  it("rejects an unauthorized mutation with 403 even though the request is well-formed", async () => {
+  it("Unauthorized API mutation rejected with 403", async () => {
     actAs("usr_bob");
     const response = await postAction("KYC-2013", { action: "APPROVE" });
     expect(response.status).toBe(403);

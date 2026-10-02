@@ -19,6 +19,7 @@ const PAGE_SIZE = 50;
 
 const RESOURCE_LINKS: Record<string, (id: string) => string> = {
   KYC_CASE: (id) => `/kyc/${id}`,
+  TRANSACTION: (id) => `/refunds/${id}`,
 };
 
 function stateLabel(state: JsonObject | null): string {

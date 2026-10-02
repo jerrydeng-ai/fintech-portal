@@ -6,40 +6,65 @@ import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { TextAreaField } from "@/components/forms/TextAreaField";
 import type { ApiErrorBody } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { humanize } from "@/lib/format";
 import { useSession } from "@/platform/auth/SessionProvider";
 import { PermissionGate } from "@/platform/rbac/PermissionGate";
-import { REVIEW_ACTION_CONFIG, canTransition } from "../services/workflow";
-import { REVIEW_ACTIONS, type CaseStatus, type ReviewAction } from "../types";
+import { REVIEW_ACTION_CONFIG, actionLabel, canTransition, requiresSecondaryApproval } from "../services/workflow";
+import { REVIEW_ACTIONS, type CaseStatus, type ReviewAction, type RiskLevel } from "../types";
 
 const BUTTON_STYLES: Record<ReviewAction, string> = {
   APPROVE: "bg-emerald-600 text-white hover:bg-emerald-700",
   REJECT: "bg-red-600 text-white hover:bg-red-700",
   ESCALATE: "bg-amber-500 text-white hover:bg-amber-600",
+  APPROVE_REJECTION: "bg-red-600 text-white hover:bg-red-700",
+  DENY_REJECTION: "bg-slate-600 text-white hover:bg-slate-700",
 };
 
-const DIALOG_TONES = { APPROVE: "primary", REJECT: "danger", ESCALATE: "warning" } as const;
+const DIALOG_TONES: Record<ReviewAction, "primary" | "danger" | "warning"> = {
+  APPROVE: "primary",
+  REJECT: "danger",
+  ESCALATE: "warning",
+  APPROVE_REJECTION: "danger",
+  DENY_REJECTION: "warning",
+};
+
+type Pending = { byId: string; byName: string; comment: string; fromStatus: CaseStatus } | null;
 
 export function ReviewActionsPanel({
   caseId,
   customerName,
   status,
+  riskLevel,
   version,
+  pending,
 }: {
   caseId: string;
   customerName: string;
   status: CaseStatus;
+  riskLevel: RiskLevel;
   version: number;
+  pending: Pending;
 }) {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<ReviewAction | null>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { permissions } = useSession();
+  const { user, permissions } = useSession();
   const canActOnAnything = REVIEW_ACTIONS.some((action) => permissions.includes(REVIEW_ACTION_CONFIG[action].permission));
 
   const config = pendingAction ? REVIEW_ACTION_CONFIG[pendingAction] : null;
   const commentMissing = Boolean(config?.requiresComment && !comment.trim());
+  const twoStepReject = pendingAction === "REJECT" && requiresSecondaryApproval(riskLevel);
+  const dialogTarget: CaseStatus | null = twoStepReject
+    ? "PENDING_SECONDARY_APPROVAL"
+    : pendingAction === "REJECT"
+      ? "REJECTED"
+      : pendingAction === "APPROVE_REJECTION"
+        ? "REJECTED"
+        : pendingAction === "DENY_REJECTION"
+          ? (pending?.fromStatus ?? null)
+          : (config?.targetStatus ?? null);
 
   function close() {
     setPendingAction(null);
@@ -75,7 +100,12 @@ export function ReviewActionsPanel({
 
   return (
     <div className="space-y-3">
-      {!canActOnAnything ? (
+      {status === "PENDING_SECONDARY_APPROVAL" && pending ? (
+        <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          Rejection requested by <strong>{pending.byName}</strong>
+          {pending.comment ? ` — “${pending.comment}”` : ""}. Awaiting a Compliance Manager&rsquo;s decision.
+        </p>
+      ) : !canActOnAnything ? (
         <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
           Your role can view this case but cannot take review decisions.
         </p>
@@ -86,19 +116,26 @@ export function ReviewActionsPanel({
         {REVIEW_ACTIONS.map((action) => {
           const actionConfig = REVIEW_ACTION_CONFIG[action];
           const allowed = canTransition(status, action);
+          const isSelfApproval = action === "APPROVE_REJECTION" && pending?.byId === user.id;
+          const disabled = !allowed || isSelfApproval;
+          const title = isSelfApproval
+            ? "You cannot approve your own rejection request"
+            : allowed
+              ? undefined
+              : `Not available for ${status} cases`;
           return (
             <PermissionGate key={action} permission={actionConfig.permission}>
               <button
                 type="button"
-                disabled={!allowed}
-                title={allowed ? undefined : `Not available for ${status} cases`}
+                disabled={disabled}
+                title={title}
                 onClick={() => setPendingAction(action)}
                 className={cn(
                   "rounded-md px-4 py-2 text-sm font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-40",
                   BUTTON_STYLES[action],
                 )}
               >
-                {actionConfig.label}
+                {actionLabel(action, riskLevel)}
               </button>
             </PermissionGate>
           );
@@ -107,16 +144,27 @@ export function ReviewActionsPanel({
 
       <ConfirmationDialog
         open={pendingAction !== null}
-        title={config ? `${config.label} KYC case for ${customerName}?` : ""}
+        title={pendingAction ? `${actionLabel(pendingAction, riskLevel)} KYC case for ${customerName}?` : ""}
         description={
           config && (
             <>
-              Status will change from <strong>{status}</strong> to <strong>{config.targetStatus}</strong>. This decision is
-              recorded permanently in the audit trail.
+              {twoStepReject ? (
+                <>
+                  This is a <strong>HIGH</strong>-risk case: status will change to{" "}
+                  <strong>Pending secondary approval</strong> and a Compliance Manager must approve the rejection before
+                  it takes effect.
+                </>
+              ) : (
+                <>
+                  Status will change from <strong>{status}</strong> to{" "}
+                  <strong>{dialogTarget ? humanize(dialogTarget) : "the previous status"}</strong>. This decision is
+                  recorded permanently in the audit trail.
+                </>
+              )}
             </>
           )
         }
-        confirmLabel={config ? `Confirm ${config.label.toLowerCase()}` : "Confirm"}
+        confirmLabel={pendingAction ? `Confirm ${actionLabel(pendingAction, riskLevel).toLowerCase()}` : "Confirm"}
         tone={pendingAction ? DIALOG_TONES[pendingAction] : "primary"}
         confirmDisabled={commentMissing}
         busy={busy}

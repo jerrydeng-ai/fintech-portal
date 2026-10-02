@@ -161,6 +161,34 @@ const CASES: SeedCase[] = [
 
 const HOUR = 60 * 60 * 1000;
 
+type SeedTxn = {
+  customerId: string;
+  name: string;
+  merchantRef: string;
+  amountCents: number;
+  method: string;
+  status: "SETTLED" | "REFUNDED";
+  hoursAgo: number;
+  refund?: { by: "usr_alice" | "usr_carol"; hoursAgo: number; reason: string };
+};
+
+const TRANSACTIONS: SeedTxn[] = [
+  { customerId: "CUST-10231", name: "Marcus Ellery-Vance", merchantRef: "MRC-88541", amountCents: 12500, method: "VISA_CREDIT", status: "SETTLED", hoursAgo: 5 },
+  { customerId: "CUST-10244", name: "Priya Raman", merchantRef: "MRC-90210", amountCents: 8420, method: "VISA_DEBIT", status: "SETTLED", hoursAgo: 9 },
+  { customerId: "CUST-10252", name: "Diego Fuentes Ortiz", merchantRef: "MRC-77128", amountCents: 156000, method: "MASTERCARD_CREDIT", status: "SETTLED", hoursAgo: 14 },
+  { customerId: "CUST-10267", name: "Hannah Okafor", merchantRef: "MRC-61204", amountCents: 4999, method: "AMEX", status: "SETTLED", hoursAgo: 22 },
+  { customerId: "CUST-10271", name: "Lukas Brandt", merchantRef: "MRC-55876", amountCents: 23050, method: "VISA_CREDIT", status: "SETTLED", hoursAgo: 31 },
+  { customerId: "CUST-10283", name: "Sofia Marchetti", merchantRef: "MRC-44091", amountCents: 31000, method: "MASTERCARD_DEBIT", status: "REFUNDED", hoursAgo: 60,
+    refund: { by: "usr_carol", hoursAgo: 50, reason: "Duplicate charge confirmed by merchant." } },
+  { customerId: "CUST-10290", name: "Yusuf Al-Hakim", merchantRef: "MRC-39817", amountCents: 75400, method: "VISA_CREDIT", status: "SETTLED", hoursAgo: 41 },
+  { customerId: "CUST-10302", name: "Emily Chen", merchantRef: "MRC-28460", amountCents: 12100, method: "AMEX", status: "REFUNDED", hoursAgo: 96,
+    refund: { by: "usr_alice", hoursAgo: 80, reason: "Service not rendered; goodwill refund." } },
+  { customerId: "CUST-10315", name: "Viktor Sokolov", merchantRef: "MRC-19328", amountCents: 209900, method: "VISA_CREDIT", status: "SETTLED", hoursAgo: 48 },
+  { customerId: "CUST-10328", name: "Grace Mwangi", merchantRef: "MRC-16027", amountCents: 6700, method: "MASTERCARD_DEBIT", status: "SETTLED", hoursAgo: 55 },
+  { customerId: "CUST-10351", name: "Arjun Mehta", merchantRef: "MRC-07455", amountCents: 18800, method: "VISA_DEBIT", status: "SETTLED", hoursAgo: 70 },
+  { customerId: "CUST-10404", name: "Anna Kowalska", merchantRef: "MRC-02893", amountCents: 44300, method: "MASTERCARD_CREDIT", status: "SETTLED", hoursAgo: 90 },
+];
+
 export async function seedDatabase(prisma: PrismaClient | Prisma.TransactionClient, now = new Date()): Promise<void> {
   const ago = (hours: number) => new Date(now.getTime() - hours * HOUR);
 
@@ -168,6 +196,9 @@ export async function seedDatabase(prisma: PrismaClient | Prisma.TransactionClie
     await prisma.user.create({ data: user });
   }
   const users = new Map(DEMO_USERS.map((u) => [u.id, u]));
+
+  await seedExtras(prisma, now);
+
 
   for (const [index, seed] of CASES.entries()) {
     const caseId = `KYC-${2001 + index}`;
@@ -236,4 +267,75 @@ export async function seedDatabase(prisma: PrismaClient | Prisma.TransactionClie
       });
     }
   }
+}
+
+/** Sync demo users on an existing (migrated) database — new users inserted, roles/titles updated. */
+export async function syncDemoUsers(prisma: Db) {
+  for (const user of DEMO_USERS) {
+    await prisma.user.upsert({ where: { id: user.id }, update: { role: user.role, title: user.title }, create: user });
+  }
+}
+
+type Db = Pick<PrismaClient, "transaction" | "auditEvent" | "user">;
+
+/** Transactions + platform-wide audit events, seeded only when the Transaction table is empty. */
+export async function seedExtras(prisma: Db, now: Date = new Date()) {
+  if ((await prisma.transaction.count()) > 0) return;
+  const ago = (hours: number) => new Date(now.getTime() - hours * HOUR);
+  const users = new Map(DEMO_USERS.map((u) => [u.id, u]));
+
+  for (const [index, seed] of TRANSACTIONS.entries()) {
+    const txnId = `TXN-${9001 + index}`;
+    await prisma.transaction.create({
+      data: {
+        id: txnId,
+        customerId: seed.customerId,
+        customerName: seed.name,
+        merchantRef: seed.merchantRef,
+        amountCents: seed.amountCents,
+        currency: "USD",
+        method: seed.method,
+        status: seed.status,
+        createdAt: ago(seed.hoursAgo),
+        refundedAt: seed.refund ? ago(seed.refund.hoursAgo) : null,
+        refundedById: seed.refund?.by ?? null,
+        refundedByName: seed.refund ? users.get(seed.refund.by)!.name : null,
+        refundReason: seed.refund?.reason ?? null,
+      },
+    });
+    if (seed.refund) {
+      const actor = users.get(seed.refund.by)!;
+      await prisma.auditEvent.create({
+        data: {
+          timestamp: ago(seed.refund.hoursAgo),
+          userId: actor.id,
+          userName: actor.name,
+          userRole: actor.role,
+          action: "REFUND_APPROVED",
+          resourceType: "TRANSACTION",
+          resourceId: txnId,
+          previousState: JSON.stringify({ status: "SETTLED" }),
+          newState: JSON.stringify({ status: "REFUNDED" }),
+          metadata: JSON.stringify({ customerId: seed.customerId, customerName: seed.name, amountCents: seed.amountCents, currency: "USD", comment: seed.refund.reason }),
+        },
+      });
+    }
+  }
+
+  // Audit is platform-wide, not KYC-specific: seed a feature-flag event as a second example.
+  const carol = users.get("usr_carol")!;
+  await prisma.auditEvent.create({
+    data: {
+      timestamp: ago(16),
+      userId: carol.id,
+      userName: carol.name,
+      userRole: carol.role,
+      action: "FEATURE_FLAG_CHANGED",
+      resourceType: "FEATURE_FLAG",
+      resourceId: "kyc_two_step_rejection",
+      previousState: JSON.stringify({ enabled: false }),
+      newState: JSON.stringify({ enabled: true }),
+      metadata: JSON.stringify({ comment: "Enabled two-step rejection for HIGH-risk KYC cases." }),
+    },
+  });
 }

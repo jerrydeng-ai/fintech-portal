@@ -1,10 +1,11 @@
-export const CASE_STATUSES = ["PENDING", "IN_REVIEW", "APPROVED", "REJECTED", "ESCALATED"] as const;
+// PENDING_SECONDARY_APPROVAL: HIGH-risk rejections await a Compliance Manager (see workflow.ts).
+export const CASE_STATUSES = ["PENDING", "IN_REVIEW", "ESCALATED", "PENDING_SECONDARY_APPROVAL", "APPROVED", "REJECTED"] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
 
 export const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 
-export const REVIEW_ACTIONS = ["APPROVE", "REJECT", "ESCALATE"] as const;
+export const REVIEW_ACTIONS = ["APPROVE", "REJECT", "ESCALATE", "APPROVE_REJECTION", "DENY_REJECTION"] as const;
 export type ReviewAction = (typeof REVIEW_ACTIONS)[number];
 
 export const CASE_SORT_KEYS = ["customerName", "country", "riskScore", "status", "createdAt"] as const;
@@ -56,6 +57,8 @@ export type KycCaseDetail = KycCaseSummary & {
     pepScreening: string;
   };
   riskFactors: RiskFactorDto[];
+  /** Rejection request awaiting a Compliance Manager's decision. */
+  pending: { action: "REJECT"; byId: string; byName: string; comment: string; fromStatus: CaseStatus } | null;
 };
 
 export type QueueStats = {

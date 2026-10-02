@@ -140,7 +140,7 @@ Defined once in `src/platform/rbac/permissions.ts`:
 | `kyc:reject`   |               | ✓                  | ✓     |
 | `kyc:escalate` |               | ✓                  | ✓     |
 | `audit:view`   |               | ✓                  | ✓     |
-| `admin:manage` |               |                    | ✓     |
+| `admin:manage (ADMIN role only)` |               |                    | ✓     |
 
 - **Server side is authoritative.** Every service function starts with `requirePermission(actor, permission)`, which throws `ForbiddenError` (HTTP 403). This runs no matter how the request arrives — UI, `curl`, or a script.
 - Denied privileged mutations are themselves audited as `ACCESS_DENIED`.
@@ -229,3 +229,11 @@ What you **write**:
 | Ops           | `npm run dev`                          | CI (lint/typecheck/test/build), container image, secrets manager, observability, rate limiting, CSRF protection for mutations |
 
 All customer data in this repository is fictional.
+
+
+## What's new in this version
+
+- **Refund Operations (`/refunds`)** — a second internal tool built entirely on the shared platform: transaction search, details, a refund action gated by `refund:approve`, and `REFUND_APPROVED` audit events. The KYC module was not modified to add it.
+- **Two-step rejection for HIGH-risk cases** — a `REJECT` on a HIGH-risk case files a request (`PENDING_SECONDARY_APPROVAL`, audited as `KYC_REJECTION_REQUESTED`); a Compliance Manager (Carol) approves (`KYC_REJECTION_APPROVED` → `REJECTED`) or denies (`KYC_REJECTION_DENIED` → prior status). Requesters cannot approve their own requests. LOW/MEDIUM rejections are unchanged.
+- **`/production-readiness`** — an honest split between what the prototype demonstrates and the platform ownership responsibilities that remain for production.
+- **CI** — `.github/workflows/ci.yml` runs install, Prisma generate, lint, typecheck, tests and a production build on every push/PR.

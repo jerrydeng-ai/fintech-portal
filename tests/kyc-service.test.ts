@@ -6,14 +6,14 @@ import { prisma } from "@/platform/database/client";
 import { alice, bob, carol } from "./helpers";
 
 describe("KYC service authorization", () => {
-  it("Support Agent can view KYC cases", async () => {
+  it("Support Agent can view KYC", async () => {
     const cases = await listCases(bob, {});
     expect(cases).toHaveLength(20);
     const detail = await getCase(bob, "KYC-2001");
     expect(detail.customerId).toBe("CUST-10231");
   });
 
-  it("Support Agent cannot approve; case is unchanged and the denial is audited", async () => {
+  it("Support Agent cannot approve KYC; the denial is audited", async () => {
     await expect(performReviewAction(bob, "KYC-2004", { action: "APPROVE" })).rejects.toBeInstanceOf(ForbiddenError);
     expect((await getCase(alice, "KYC-2004")).status).toBe("PENDING");
     const history = await getCaseHistory(alice, "KYC-2004");
@@ -24,7 +24,7 @@ describe("KYC service authorization", () => {
     await expect(listAuditLog(bob)).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("Compliance Analyst can approve KYC and an audit event is created atomically", async () => {
+  it("Analyst can approve KYC and an audit event is created atomically", async () => {
     const result = await performReviewAction(alice, "KYC-2001", { action: "APPROVE", comment: "Docs verified" });
     expect(result.case.status).toBe("APPROVED");
     expect(result.case.assignedAnalystName).toBe("Alice");
@@ -67,7 +67,7 @@ describe("Queue filtering and audit pagination", () => {
   it("status=OPEN returns only open cases", async () => {
     const cases = await listCases(alice, parseCaseQuery({ status: "OPEN", riskLevel: "HIGH" }));
     expect(cases.length).toBeGreaterThan(0);
-    expect(cases.every((c) => ["PENDING", "IN_REVIEW", "ESCALATED"].includes(c.status))).toBe(true);
+    expect(cases.every((c) => ["PENDING", "IN_REVIEW", "ESCALATED", "PENDING_SECONDARY_APPROVAL"].includes(c.status))).toBe(true);
     expect(cases.every((c) => c.riskLevel === "HIGH")).toBe(true);
     const closed = await listCases(alice, parseCaseQuery({ status: "OPEN" }));
     expect(closed.some((c) => c.status === "APPROVED" || c.status === "REJECTED")).toBe(false);
